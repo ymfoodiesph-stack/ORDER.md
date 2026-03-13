@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>YM Foodies Order Form</title>
+<style>
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: auto; padding: 20px; background: #f7f7f7; }
+h1 { text-align: center; color: #333; }
+.customer-info { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 30px; }
+.customer-info label { flex: 1 1 250px; }
+.menu-section { background: #fff; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+.menu-section h3 { margin-top: 0; color: #444; }
+.menu-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.menu-item select, .menu-item input { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+.totals { text-align: right; font-size: 18px; font-weight: bold; margin-top: 20px; }
+button { display: block; margin: 20px auto; background: #ff6b6b; color: #fff; border: none; padding: 12px 30px; font-size: 16px; border-radius: 6px; cursor: pointer; }
+button:hover { background: #ff5252; }
+</style>
+</head>
+<body>
+
+<h1>YM Foodies Order Form</h1>
+
+<div class="customer-info">
+  <label>Name: <input type="text" id="customer" required></label>
+  <label>Contact Number: <input type="text" id="contact" required></label>
+  <label>Address: <input type="text" id="address" required></label>
+</div>
+
+<div id="menuContainer"></div>
+
+<div class="totals">Grand Total: ₱<span id="grandTotal">0</span></div>
+
+<button onclick="submitOrder()">Submit Order</button>
+
+<script>
+// Apps Script Web App URL
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxDPe7BJWhYZUo67PlpaGkm-KKi5oUDCrzCwLExYPu25dOwckNauaLeoq2TWCN2gslnnpg/exec";
+
+// Product data
+const products = [
+  {ProductID:"SKU01", Name:"Chicken Pastel", Variant:"Regular", Selling_Price:100, Cost:80, Stock:10},
+  {ProductID:"SKU02", Name:"Chicken Pastel", Variant:"Spicy", Selling_Price:105, Cost:85, Stock:10},
+  {ProductID:"SKU05", Name:"Fish Pastel Kagikit", Variant:"Regular", Selling_Price:110, Cost:80, Stock:10},
+  {ProductID:"SKU06", Name:"Fish Pastel Kagikit", Variant:"Spicy", Selling_Price:115, Cost:85, Stock:10},
+  {ProductID:"SKU03", Name:"Tinapayan Premium", Variant:"Regular", Selling_Price:150, Cost:100, Stock:10},
+  {ProductID:"SKU04", Name:"Tinapayan Premium", Variant:"Spicy", Selling_Price:155, Cost:105, Stock:10}
+];
+
+// Build menu sections
+function buildMenu() {
+  const container = document.getElementById('menuContainer');
+  container.innerHTML = "";
+  const categories = [...new Set(products.map(p => p.Name))];
+
+  categories.forEach(category => {
+    const section = document.createElement('div');
+    section.className = 'menu-section';
+    section.innerHTML = `<h3>${category}</h3>`;
+
+    const variants = products.filter(p => p.Name === category);
+    const item = document.createElement('div');
+    item.className = 'menu-item';
+    item.innerHTML = `
+      <select onchange="updateMenuItem(this)">
+        ${variants.map((v,i)=>`<option value="${i}">${v.Variant} - ₱${v.Selling_Price} (Stock: ${v.Stock})</option>`).join('')}
+      </select>
+      Qty: <input type="number" min="0" max="${variants[0].Stock}" value="0" onchange="updateTotal()">
+      Total: ₱<span class="itemTotal">0</span>
+    `;
+    section.appendChild(item);
+    container.appendChild(section);
+  });
+  updateTotal();
+}
+
+// Update item when variant changes
+function updateMenuItem(select) {
+  const row = select.closest('.menu-item');
+  const category = select.closest('.menu-section').querySelector('h3').innerText;
+  const variantIndex = parseInt(select.value);
+  const product = products.filter(p => p.Name === category)[variantIndex];
+  const qtyInput = row.querySelector('input[type=number]');
+  qtyInput.value = 0;
+  qtyInput.max = product.Stock;
+  updateTotal();
+}
+
+// Update grand total
+function updateTotal() {
+  let grandTotal = 0;
+  document.querySelectorAll('.menu-item').forEach(row => {
+    const qty = parseInt(row.querySelector('input[type=number]').value) || 0;
+    const category = row.closest('.menu-section').querySelector('h3').innerText;
+    const variantIndex = parseInt(row.querySelector('select').value);
+    const product = products.filter(p=>p.Name===category)[variantIndex];
+    const total = qty * product.Selling_Price;
+    row.querySelector('.itemTotal').innerText = total;
+    grandTotal += total;
+  });
+  document.getElementById('grandTotal').innerText = grandTotal;
+}
+
+// Submit order
+async function submitOrder() {
+  const customer = document.getElementById('customer').value.trim();
+  const contact = document.getElementById('contact').value.trim();
+  const address = document.getElementById('address').value.trim();
+  if(!customer || !contact || !address){alert("Please fill all customer details."); return;}
+
+  const items = [];
+  document.querySelectorAll('.menu-item').forEach(row => {
+    const qty = parseInt(row.querySelector('input[type=number]').value) || 0;
+    if(qty>0){
+      const category = row.closest('.menu-section').querySelector('h3').innerText;
+      const variantIndex = parseInt(row.querySelector('select').value);
+      const product = products.filter(p => p.Name === category)[variantIndex];
+      items.push({ProductID: product.ProductID, Qty: qty, Price: product.Selling_Price});
+    }
+  });
+
+  if(items.length===0){alert("Please select at least one item."); return;}
+
+  const orderData = {customer, contact, address, items};
+
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(orderData)
+    });
+
+    if(res.ok){
+      alert("Order submitted successfully!");
+      document.getElementById('customer').value = "";
+      document.getElementById('contact').value = "";
+      document.getElementById('address').value = "";
+      document.querySelectorAll('input[type=number]').forEach(i=>i.value=0);
+      updateTotal();
+    } else {
+      alert("Failed to submit order. Try again later.");
+    }
+  } catch(err) {
+    console.error(err);
+    alert("Error submitting order.");
+  }
+}
+
+// Initialize menu
+buildMenu();
+</script>
+
+</body>
+</html>
