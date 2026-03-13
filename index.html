@@ -2,39 +2,106 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>YM Foodies Order Form</title>
 <style>
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: auto; padding: 20px; background: #f7f7f7; }
-h1 { text-align: center; color: #333; }
-.customer-info { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 30px; }
-.customer-info label { flex: 1 1 250px; }
-.menu-section { background: #fff; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-.menu-section h3 { margin-top: 0; color: #444; }
-.menu-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-.menu-item select, .menu-item input { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
-.totals { text-align: right; font-size: 18px; font-weight: bold; margin-top: 20px; }
-button { display: block; margin: 20px auto; background: #ff6b6b; color: #fff; border: none; padding: 12px 30px; font-size: 16px; border-radius: 6px; cursor: pointer; }
-button:hover { background: #ff5252; }
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  h1 { text-align: center; }
+  .product { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+  .product input { width: 50px; }
+  .order-summary { margin-top: 20px; }
+  button { padding: 10px 20px; margin-top: 10px; }
 </style>
 </head>
 <body>
+<h1>YM Foodies Online Ordering</h1>
 
-<h1>YM Foodies Order Form</h1>
+<div id="products"></div>
 
-<div class="customer-info">
-  <label>Name: <input type="text" id="customer" required></label>
-  <label>Contact Number: <input type="text" id="contact" required></label>
-  <label>Address: <input type="text" id="address" required></label>
+<h2>Customer Details</h2>
+<label>Name: <input type="text" id="name"></label><br>
+<label>Phone: <input type="text" id="phone"></label><br>
+<label>Address: 
+  <select id="address">
+    <option value="Pagadian">Pagadian</option>
+    <option value="Labangan">Labangan</option>
+    <option value="Tukuran">Tukuran</option>
+  </select>
+</label><br>
+<label>Payment: 
+  <select id="payment">
+    <option value="GCash">GCash</option>
+  </select>
+</label><br>
+
+<div class="order-summary">
+  <button onclick="placeOrder()">Place Order</button>
 </div>
 
-<div id="menuContainer"></div>
-
-<div class="totals">Grand Total: ₱<span id="grandTotal">0</span></div>
-
-<button onclick="submitOrder()">Submit Order</button>
+<div id="result"></div>
 
 <script>
-// Apps Script Web App URL
+const API_URL = "https://script.google.com/macros/s/AKfycbyIYaDX6_m_fh7eCrFqnNpuorin2FDzLYgPV7ZFGAEJCk6UQNKzCn2ejOC2JlgtZQaOLQ/exec";
+
+// Load products from API
+async function loadProducts() {
+  const res = await fetch(API_URL + "?action=products");
+  const products = await res.json();
+  const container = document.getElementById("products");
+  products.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "product";
+    div.innerHTML = `
+      <strong>${p.name} - ${p.variant}</strong> - ₱${p.price} <br>
+      Quantity: <input type="number" min="0" value="0" data-id="${p.id}" data-name="${p.name}" data-variant="${p.variant}" data-price="${p.price}">
+    `;
+    container.appendChild(div);
+  });
+}
+
+async function placeOrder() {
+  const items = [];
+  document.querySelectorAll(".product input").forEach(input => {
+    const qty = parseInt(input.value);
+    if (qty > 0) {
+      items.push({
+        id: input.dataset.id,
+        name: input.dataset.name,
+        variant: input.dataset.variant,
+        price: parseFloat(input.dataset.price),
+        qty: qty
+      });
+    }
+  });
+
+  if (items.length === 0) {
+    alert("Please select at least 1 item");
+    return;
+  }
+
+  const orderData = {
+    action: "createOrder",
+    name: document.getElementById("name").value,
+    phone: document.getElementById("phone").value,
+    address: document.getElementById("address").value,
+    payment: document.getElementById("payment").value,
+    items: items
+  };
+
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(orderData)
+  });
+  
+  const result = await res.json();
+  document.getElementById("result").innerHTML = `<h3>Order Placed! Order ID: ${result.orderID}</h3>`;
+}
+
+loadProducts();
+</script>
+</body>
+</html>// Apps Script Web App URL
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxDPe7BJWhYZUo67PlpaGkm-KKi5oUDCrzCwLExYPu25dOwckNauaLeoq2TWCN2gslnnpg/exec";
 
 // Product data
